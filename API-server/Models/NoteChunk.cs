@@ -6,7 +6,7 @@ namespace ProductivityHub.Models
     {
         public Guid Id { get; set; }
 
-        public Guid NodeId { get; set; }
+        public Guid NoteId { get; set; }
 
         public required string ChunkText { get; set; } = string.Empty;
 

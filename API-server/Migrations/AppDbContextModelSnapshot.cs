@@ -93,9 +93,6 @@ namespace ProductivityHub.Migrations
                     b.Property<Vector>("Embedding")
                         .HasColumnType("vector(1536)");
 
-                    b.Property<Guid>("NodeId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("NoteId")
                         .HasColumnType("uuid");
 

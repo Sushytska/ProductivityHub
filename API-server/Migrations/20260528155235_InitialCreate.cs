@@ -65,11 +65,10 @@ namespace ProductivityHub.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    NodeId = table.Column<Guid>(type: "uuid", nullable: false),
+                    NoteId = table.Column<Guid>(type: "uuid", nullable: false),
                     ChunkText = table.Column<string>(type: "text", nullable: false),
                     ChunkIndex = table.Column<int>(type: "integer", nullable: false),
-                    Embedding = table.Column<Vector>(type: "vector(1536)", nullable: true),
-                    NoteId = table.Column<Guid>(type: "uuid", nullable: false)
+                    Embedding = table.Column<Vector>(type: "vector(1536)", nullable: true)
                 },
                 constraints: table =>
                 {

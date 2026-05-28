@@ -13,7 +13,7 @@ using ProductivityHub.Database;
 namespace ProductivityHub.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260527144556_InitialCreate")]
+    [Migration("20260528155235_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -95,9 +95,6 @@ namespace ProductivityHub.Migrations
 
                     b.Property<Vector>("Embedding")
                         .HasColumnType("vector(1536)");
-
-                    b.Property<Guid>("NodeId")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid>("NoteId")
                         .HasColumnType("uuid");
