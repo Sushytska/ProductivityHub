@@ -1,4 +1,11 @@
+using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
+using ProductivityHub.Database;
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"), o => o.UseVector()));
 
 // Add services to the container.
 
