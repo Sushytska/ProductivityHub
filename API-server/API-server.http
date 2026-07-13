@@ -1,6 +1,6 @@
 @API_server_HostAddress = http://localhost:5043
 
-GET {{API_server_HostAddress}}/weatherforecast/
+GET {{API_server_HostAddress}}/productivityhub/
 Accept: application/json
 
 ###

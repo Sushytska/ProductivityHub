@@ -10,6 +10,6 @@
 
         public required string Message { get; set; } = string.Empty;
 
-        public DateTime CreatedDate { get; set; } = DateTime.Now;
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
     }
 }

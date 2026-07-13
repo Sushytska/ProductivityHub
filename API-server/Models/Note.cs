@@ -14,7 +14,7 @@ namespace ProductivityHub.Models
 
         public Vector? Embedding { get; set; }
 
-        public DateTime CreatedDate { get; set; } = DateTime.Now;
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 
         public List<NoteChunk> Chunks { get; set; } = new List<NoteChunk>();
 
