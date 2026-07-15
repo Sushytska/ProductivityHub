@@ -48,6 +48,25 @@ Long notes are split into ~500-word chunks, each with its own embedding vector. 
 
 ---
 
+## Status
+
+This project is under active development. What's actually built so far vs. what's on the roadmap:
+
+**Implemented**
+- ✅ JWT authentication (register / login)
+- ✅ Notes CRUD, scoped to the authenticated user
+
+**Planned**
+- ⏳ Tasks
+- ⏳ Habit Tracker
+- ⏳ Note chunking + embeddings (the `Note`/`NoteChunk` pgvector schema exists, but there's no embedding pipeline yet)
+- ⏳ RAG-powered AI chat
+- ⏳ Streaming chat responses
+- ⏳ Frontend (Angular SPA)
+- ⏳ Realtime layer (Node.js)
+
+---
+
 ## Tech stack
 
 | Layer | Technology |
