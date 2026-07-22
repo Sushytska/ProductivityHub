@@ -49,10 +49,23 @@ namespace ProductivityHub.Services
             {
                 var chunkTexts = _chunker.Chunk(note.Content);
 
-                var existingChunks = await _db.NoteChunks
+                // Delete without loading: select only the Id (never the embedding vector) and
+                // remove via key-only stub entities, so re-chunking a note never pulls its old
+                // vectors over the wire just to discard them. If a chunk happens to already be
+                // tracked (e.g. an eager-loaded Note.Chunks earlier in the same scope), reuse
+                // that tracked instance instead of attaching a conflicting stub with the same key.
+                var existingChunkIds = await _db.NoteChunks
                     .Where(c => c.NoteId == noteId)
+                    .Select(c => c.Id)
                     .ToListAsync(cancellationToken);
-                _db.NoteChunks.RemoveRange(existingChunks);
+
+                foreach (var chunkId in existingChunkIds)
+                {
+                    var tracked = _db.ChangeTracker.Entries<NoteChunk>()
+                        .FirstOrDefault(e => e.Entity.Id == chunkId)?.Entity;
+
+                    _db.NoteChunks.Remove(tracked ?? new NoteChunk { Id = chunkId, ChunkText = string.Empty });
+                }
 
                 if (chunkTexts.Count > 0)
                 {
@@ -88,8 +101,24 @@ namespace ProductivityHub.Services
                     _logger.LogWarning(ex, "Embedding attempt {Attempt}/{Max} failed for note {NoteId}; retrying after delay.",
                         note.EmbeddingAttempts, MaxEmbeddingAttempts, noteId);
 
+                    // NOTE: this delay is awaited inline in the single-worker queue loop
+                    // (NoteEmbeddingBackgroundService), so a failing note blocks every other
+                    // queued note from being processed for up to _retryDelay. Acceptable for a
+                    // single-user local deployment; a scheduled/delayed re-enqueue (rather than
+                    // sleeping in-band) would be needed to avoid head-of-line blocking at scale.
                     await Task.Delay(_retryDelay, cancellationToken);
-                    _queue.Enqueue(noteId);
+
+                    // The note's status is already saved as Pending above, so if Enqueue itself
+                    // fails (e.g. Redis is down), the note isn't lost — StrandedNoteReconciler
+                    // will pick it up on the next app startup.
+                    try
+                    {
+                        _queue.Enqueue(noteId);
+                    }
+                    catch (Exception enqueueEx)
+                    {
+                        _logger.LogWarning(enqueueEx, "Failed to re-enqueue note {NoteId} after a failed embedding attempt; it will be picked up on the next reconciliation pass.", noteId);
+                    }
                 }
                 else
                 {

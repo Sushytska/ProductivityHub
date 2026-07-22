@@ -9,11 +9,13 @@ namespace ProductivityHub.Services
     {
         private readonly AppDbContext _db;
         private readonly INoteEmbeddingQueue _embeddingQueue;
+        private readonly ILogger<NoteService> _logger;
 
-        public NoteService(AppDbContext db, INoteEmbeddingQueue embeddingQueue)
+        public NoteService(AppDbContext db, INoteEmbeddingQueue embeddingQueue, ILogger<NoteService> logger)
         {
             _db = db;
             _embeddingQueue = embeddingQueue;
+            _logger = logger;
         }
 
         public async Task<NoteResponse> CreateAsync(Guid userId, CreateNoteRequest request)
@@ -30,7 +32,7 @@ namespace ProductivityHub.Services
             _db.Notes.Add(note);
             await _db.SaveChangesAsync();
 
-            _embeddingQueue.Enqueue(note.Id);
+            TryEnqueueEmbedding(note.Id);
 
             return ToResponse(note);
         }
@@ -71,7 +73,7 @@ namespace ProductivityHub.Services
 
             await _db.SaveChangesAsync();
 
-            _embeddingQueue.Enqueue(note.Id);
+            TryEnqueueEmbedding(note.Id);
 
             return ToResponse(note);
         }
@@ -90,6 +92,21 @@ namespace ProductivityHub.Services
             await _db.SaveChangesAsync();
 
             return true;
+        }
+
+        private void TryEnqueueEmbedding(Guid noteId)
+        {
+            // The note is already committed at this point (EmbeddingStatus=Pending), so a queue
+            // failure here must not fail the request. StrandedNoteReconciler picks up any note
+            // left in Pending with no queue entry the next time the app starts.
+            try
+            {
+                _embeddingQueue.Enqueue(noteId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to enqueue note {NoteId} for embedding; it will be picked up on the next reconciliation pass.", noteId);
+            }
         }
 
         private static NoteResponse ToResponse(Note note) =>

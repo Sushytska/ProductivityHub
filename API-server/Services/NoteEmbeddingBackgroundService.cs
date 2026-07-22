@@ -18,6 +18,12 @@ namespace ProductivityHub.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var reconciler = scope.ServiceProvider.GetRequiredService<StrandedNoteReconciler>();
+                await reconciler.RequeueStrandedNotesAsync(stoppingToken);
+            }
+
             await foreach (var noteId in _queue.DequeueAllAsync(stoppingToken))
             {
                 try

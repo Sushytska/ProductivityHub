@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using ProductivityHub.Database;
 using ProductivityHub.Models;
 using ProductivityHub.Services;
@@ -18,7 +19,7 @@ public class NoteServiceTests
     }
 
     private static NoteService CreateSut(AppDbContext db, FakeNoteEmbeddingQueue? queue = null) =>
-        new(db, queue ?? new FakeNoteEmbeddingQueue());
+        new(db, queue ?? new FakeNoteEmbeddingQueue(), NullLogger<NoteService>.Instance);
 
     [Fact]
     public async Task CreateAsync_SetsOwnerToCallingUser()
@@ -47,6 +48,20 @@ public class NoteServiceTests
 
         Assert.Single(queue.EnqueuedIds);
         Assert.Equal(response.Id, queue.EnqueuedIds[0]);
+    }
+
+    [Fact]
+    public async Task CreateAsync_EnqueueThrows_StillPersistsNoteAndReturnsSuccessfully()
+    {
+        using var db = CreateDbContext();
+        var queue = new FakeNoteEmbeddingQueue { ThrowOnEnqueue = true };
+        var sut = CreateSut(db, queue);
+
+        var response = await sut.CreateAsync(Guid.NewGuid(), new CreateNoteRequest("Title", "Content"));
+
+        Assert.NotNull(response);
+        var stored = await db.Notes.SingleAsync(n => n.Id == response.Id);
+        Assert.Equal(EmbeddingStatus.Pending, stored.EmbeddingStatus);
     }
 
     [Fact]
@@ -160,6 +175,22 @@ public class NoteServiceTests
 
         Assert.Single(queue.EnqueuedIds);
         Assert.Equal(created.Id, queue.EnqueuedIds[0]);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_EnqueueThrows_StillUpdatesNoteAndReturnsSuccessfully()
+    {
+        using var db = CreateDbContext();
+        var queue = new FakeNoteEmbeddingQueue();
+        var sut = CreateSut(db, queue);
+        var userId = Guid.NewGuid();
+        var created = await sut.CreateAsync(userId, new CreateNoteRequest("Old", "Old body"));
+        queue.ThrowOnEnqueue = true;
+
+        var result = await sut.UpdateAsync(userId, created.Id, new UpdateNoteRequest("New", "New body"));
+
+        Assert.NotNull(result);
+        Assert.Equal("New", result!.Title);
     }
 
     [Fact]

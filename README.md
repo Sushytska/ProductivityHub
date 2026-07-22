@@ -55,15 +55,26 @@ This project is under active development. What's actually built so far vs. what'
 **Implemented**
 - ✅ JWT authentication (register / login)
 - ✅ Notes CRUD, scoped to the authenticated user
+- ✅ Background note chunking + embedding generation (Ollama `nomic-embed-text`, Redis-backed queue, retry with backoff)
 
 **Planned**
 - ⏳ Tasks
 - ⏳ Habit Tracker
-- ⏳ Note chunking + embeddings (the `Note`/`NoteChunk` pgvector schema exists, but there's no embedding pipeline yet)
-- ⏳ RAG-powered AI chat
+- ⏳ RAG-powered AI chat (the embeddings pipeline above only populates vectors — retrieval + chat generation don't exist yet)
 - ⏳ Streaming chat responses
 - ⏳ Frontend (Angular SPA)
 - ⏳ Realtime layer (Node.js)
+
+---
+
+## Known limitations
+
+The embedding pipeline is a personal-project MVP, not a production-hardened job queue. Known gaps, accepted for now:
+
+- **Migration isn't safe on databases with existing embeddings.** The `vector(1536)` → `vector(768)` column change in `AddEmbeddingPipelineColumns` has no data-clearing step; pgvector rejects the in-place resize if any `NoteChunk` rows already have a 1536-dim vector. Harmless on a fresh database (this repo's own migration history), but re-running the embedding pipeline's schema migrations against an environment that already embedded notes under the old dimension will fail and needs manual intervention (clear the `NoteChunks` table first).
+- **Race condition on concurrent edit + processing.** `Note` has no optimistic-concurrency token. If a note is edited while the background worker is still embedding an earlier version of it, the worker's completion write can overwrite the user's fresh `Pending` status with `Completed` — leaving the note briefly marked done with embeddings from the *previous* content. Self-heals on the next processing pass (the edit's own re-enqueue still runs), since only one worker instance exists today; would need a concurrency token if the worker were ever scaled out.
+- **Redundant Ollama calls on rapid edits.** `NoteService.UpdateAsync` re-enqueues on every save with no dedup — editing the same note several times in quick succession queues one embedding job per save, each fully re-chunking and re-embedding. Wasted work, not incorrect behavior; not worth a dedup layer for single-user local use.
+- **`appsettings.Docker.json` doesn't override `Redis:ConnectionString`.** Only `Ollama:BaseUrl` is set for the `Docker` environment profile; Redis would still resolve to `localhost:6379` instead of the `redis` compose service. Inert today since no `api` service is defined in `docker-compose.yml` — will need a `Redis` override alongside whenever the API itself is containerized.
 
 ---
 

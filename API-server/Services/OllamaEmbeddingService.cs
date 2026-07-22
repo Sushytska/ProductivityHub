@@ -6,6 +6,9 @@ namespace ProductivityHub.Services
 {
     public class OllamaEmbeddingService : IEmbeddingService
     {
+        // Must match the NoteChunk.Embedding column type (vector(768) — see AppDbContext).
+        private const int ExpectedEmbeddingDimension = 768;
+
         private readonly HttpClient _httpClient;
         private readonly OllamaOptions _options;
         private readonly ILogger<OllamaEmbeddingService> _logger;
@@ -54,6 +57,20 @@ namespace ProductivityHub.Services
                     "Ollama returned an unexpected embeddings payload (expected {Expected} vectors, got {Actual}).",
                     texts.Count, result?.Embeddings?.Length ?? 0);
                 throw new EmbeddingGenerationException("Ollama returned an unexpected number of embeddings.");
+            }
+
+            for (var i = 0; i < result.Embeddings.Length; i++)
+            {
+                var vector = result.Embeddings[i];
+                if (vector == null || vector.Length != ExpectedEmbeddingDimension)
+                {
+                    _logger.LogError(
+                        "Ollama returned an embedding with an unexpected shape for chunk {Index}: expected {Expected} dimensions, got {Actual}.",
+                        i, ExpectedEmbeddingDimension, vector?.Length.ToString() ?? "null");
+                    throw new EmbeddingGenerationException(
+                        $"Ollama returned {(vector == null ? "no vector" : $"a {vector.Length}-dimensional vector")} for chunk {i}, expected {ExpectedEmbeddingDimension} dimensions. " +
+                        $"Check that the configured Ollama:EmbeddingModel ('{_options.EmbeddingModel}') produces {ExpectedEmbeddingDimension}-dimensional embeddings.");
+                }
             }
 
             return result.Embeddings;

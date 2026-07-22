@@ -32,6 +32,7 @@ builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection("Olla
 builder.Services.AddSingleton<INoteChunker, NoteChunker>();
 builder.Services.AddSingleton<INoteEmbeddingQueue, NoteEmbeddingQueue>();
 builder.Services.AddScoped<NoteEmbeddingProcessor>();
+builder.Services.AddScoped<StrandedNoteReconciler>();
 
 builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>((sp, client) =>
 {

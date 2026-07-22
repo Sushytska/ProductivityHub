@@ -100,6 +100,25 @@ public class NoteEmbeddingProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_RequeueAfterFailureThrows_DoesNotPropagate()
+    {
+        using var db = CreateDbContext();
+        var note = CreateNote();
+        db.Notes.Add(note);
+        await db.SaveChangesAsync();
+
+        var embeddingService = new FakeEmbeddingService(_ => throw new InvalidOperationException("boom"));
+        var queue = new FakeNoteEmbeddingQueue { ThrowOnEnqueue = true };
+        var sut = CreateSut(db, embeddingService, queue);
+
+        await sut.ProcessAsync(note.Id, CancellationToken.None);
+
+        var updated = await db.Notes.SingleAsync(n => n.Id == note.Id);
+        Assert.Equal(EmbeddingStatus.Pending, updated.EmbeddingStatus);
+        Assert.Equal(1, updated.EmbeddingAttempts);
+    }
+
+    [Fact]
     public async Task ProcessAsync_FailureAtMaxAttempts_MarksFailedAndDoesNotRequeue()
     {
         using var db = CreateDbContext();
