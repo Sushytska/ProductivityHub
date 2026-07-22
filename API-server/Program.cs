@@ -1,10 +1,12 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Pgvector.EntityFrameworkCore;
 using ProductivityHub.Database;
 using ProductivityHub.Services;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +17,30 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<NoteService>();
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var configuration = ConfigurationOptions.Parse(builder.Configuration["Redis:ConnectionString"]!);
+    // BLPOP in NoteEmbeddingQueue blocks server-side for up to 5s; give the client's own
+    // response timeout enough headroom above that so it doesn't race a legitimate timeout.
+    configuration.SyncTimeout = 10000;
+    configuration.AsyncTimeout = 10000;
+    return ConnectionMultiplexer.Connect(configuration);
+});
+
+builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection("Ollama"));
+builder.Services.AddSingleton<INoteChunker, NoteChunker>();
+builder.Services.AddSingleton<INoteEmbeddingQueue, NoteEmbeddingQueue>();
+builder.Services.AddScoped<NoteEmbeddingProcessor>();
+
+builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<OllamaOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(120);
+});
+
+builder.Services.AddHostedService<NoteEmbeddingBackgroundService>();
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

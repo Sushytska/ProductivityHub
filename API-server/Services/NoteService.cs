@@ -8,10 +8,12 @@ namespace ProductivityHub.Services
     public class NoteService
     {
         private readonly AppDbContext _db;
+        private readonly INoteEmbeddingQueue _embeddingQueue;
 
-        public NoteService(AppDbContext db)
+        public NoteService(AppDbContext db, INoteEmbeddingQueue embeddingQueue)
         {
             _db = db;
+            _embeddingQueue = embeddingQueue;
         }
 
         public async Task<NoteResponse> CreateAsync(Guid userId, CreateNoteRequest request)
@@ -22,12 +24,13 @@ namespace ProductivityHub.Services
                 UserId = userId,
                 Title = request.Title,
                 Content = request.Content,
-                Embedding = null,
                 CreatedDate = DateTime.UtcNow
             };
 
             _db.Notes.Add(note);
             await _db.SaveChangesAsync();
+
+            _embeddingQueue.Enqueue(note.Id);
 
             return ToResponse(note);
         }
@@ -62,8 +65,13 @@ namespace ProductivityHub.Services
 
             note.Title = request.Title;
             note.Content = request.Content;
+            note.EmbeddingStatus = EmbeddingStatus.Pending;
+            note.EmbeddingAttempts = 0;
+            note.EmbeddingError = null;
 
             await _db.SaveChangesAsync();
+
+            _embeddingQueue.Enqueue(note.Id);
 
             return ToResponse(note);
         }

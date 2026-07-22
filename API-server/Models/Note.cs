@@ -1,6 +1,4 @@
-﻿using Pgvector;
-
-namespace ProductivityHub.Models
+﻿namespace ProductivityHub.Models
 {
     public class Note
     {
@@ -12,12 +10,14 @@ namespace ProductivityHub.Models
 
         public required string Content { get; set; } = string.Empty;
 
-        public Vector? Embedding { get; set; }
-
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
 
+        public EmbeddingStatus EmbeddingStatus { get; set; } = EmbeddingStatus.Pending;
+
+        public int EmbeddingAttempts { get; set; } = 0;
+
+        public string? EmbeddingError { get; set; }
+
         public List<NoteChunk> Chunks { get; set; } = new List<NoteChunk>();
-
-
     }
 }
