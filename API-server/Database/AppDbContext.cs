@@ -12,7 +12,7 @@ namespace ProductivityHub.Database
 
         public DbSet<Note> Notes { get; set; }
 
-        public DbSet<NoteChunk> NoteCunks { get; set; }
+        public DbSet<NoteChunk> NoteChunks { get; set; }
 
         public DbSet<ChatMessage> ChatMessages { get; set; }
 
@@ -25,17 +25,17 @@ namespace ProductivityHub.Database
 
             modelBuilder.Entity<Note>(entity =>
             {
-                entity.Property(n => n.Embedding)
-                    .HasColumnType("vector(1536)");
+                entity.Property(n => n.EmbeddingStatus)
+                    .HasConversion<string>();
 
                 entity.HasMany(n => n.Chunks)
                     .WithOne(n => n.Note)
                     .OnDelete(DeleteBehavior.Cascade);
             });
-                
+
             modelBuilder.Entity<NoteChunk>()
                 .Property(nc => nc.Embedding)
-                .HasColumnType("vector(1536)");
+                .HasColumnType("vector(768)");
         }
     }
 }
