@@ -43,6 +43,20 @@ builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>((sp, c
 
 builder.Services.AddHostedService<NoteEmbeddingBackgroundService>();
 
+builder.Services.Configure<AnthropicOptions>(builder.Configuration.GetSection("Anthropic"));
+builder.Services.AddScoped<IRagService, RagService>();
+builder.Services.AddHttpClient<IChatService, AnthropicChatService>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value;
+    var apiKey = builder.Configuration["Anthropic:ApiKey"]
+        ?? throw new InvalidOperationException("Anthropic:ApiKey is not configured (set via dotnet user-secrets).");
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.DefaultRequestHeaders.Add("x-api-key", apiKey);
+    client.DefaultRequestHeaders.Add("anthropic-version", options.ApiVersion);
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+builder.Services.AddScoped<ChatOrchestrationService>();
+
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
