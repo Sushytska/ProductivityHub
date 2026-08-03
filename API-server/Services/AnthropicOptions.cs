@@ -4,7 +4,7 @@ namespace ProductivityHub.Services
     {
         public string BaseUrl { get; set; } = "https://api.anthropic.com";
 
-        public string Model { get; set; } = "claude-opus-4-8";
+        public string Model { get; set; } = "claude-sonnet-5";
 
         public string ApiVersion { get; set; } = "2023-06-01";
 

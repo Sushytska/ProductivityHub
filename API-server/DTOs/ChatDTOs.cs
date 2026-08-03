@@ -4,7 +4,7 @@ namespace ProductivityHub.DTOs
 {
     public class ChatDTOs
     {
-        public record ChatRequest([Required, MinLength(1)] string Question);
+        public record ChatRequest([Required, MinLength(1), MaxLength(2000)] string Question);
 
         public record ChatResponse(string Answer, DateTime CreatedDate, IReadOnlyList<ChatSourceResponse> Sources);
 
