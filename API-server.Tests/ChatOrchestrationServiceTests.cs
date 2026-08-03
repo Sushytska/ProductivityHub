@@ -83,4 +83,107 @@ public class ChatOrchestrationServiceTests
 
         Assert.Equal(callingUser, seenUserId);
     }
+
+    private sealed class ThrowingSaveDbContext : TestAppDbContext
+    {
+        public ThrowingSaveDbContext(DbContextOptions<AppDbContext> options) : base(options)
+        {
+        }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Simulated save failure.");
+    }
+
+    [Fact]
+    public async Task AskStreamingAsync_YieldsMetaEventFirstWithRetrievedSources()
+    {
+        using var db = CreateDbContext();
+        var chunk = CreateChunk("My Note", "chunk text", chunkIndex: 3);
+        var ragService = new FakeRagService((_, _, _) => new[] { chunk });
+        var sut = CreateSut(db, ragService: ragService);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var evt in sut.AskStreamingAsync(Guid.NewGuid(), new ChatRequest("What is X?"), CancellationToken.None))
+        {
+            events.Add(evt);
+        }
+
+        var meta = Assert.IsType<ChatStreamEvent.Meta>(events[0]);
+        Assert.Single(meta.Sources);
+        Assert.Equal(chunk.NoteId, meta.Sources[0].NoteId);
+        Assert.Equal("My Note", meta.Sources[0].NoteTitle);
+        Assert.Equal(3, meta.Sources[0].ChunkIndex);
+    }
+
+    [Fact]
+    public async Task AskStreamingAsync_YieldsOneTokenPerStreamChunkInOrder()
+    {
+        using var db = CreateDbContext();
+        var chatService = new FakeChatService { StreamTokens = new[] { "Hel", "lo", " world" } };
+        var sut = CreateSut(db, chatService: chatService);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var evt in sut.AskStreamingAsync(Guid.NewGuid(), new ChatRequest("What is X?"), CancellationToken.None))
+        {
+            events.Add(evt);
+        }
+
+        var tokens = events.OfType<ChatStreamEvent.Token>().Select(t => t.Text).ToList();
+        Assert.Equal(new[] { "Hel", "lo", " world" }, tokens);
+    }
+
+    [Fact]
+    public async Task AskStreamingAsync_PersistsMessagesOnlyAfterFullEnumeration_ThenYieldsDone()
+    {
+        using var db = CreateDbContext();
+        var chatService = new FakeChatService { StreamTokens = new[] { "Hel", "lo" } };
+        var sut = CreateSut(db, chatService: chatService);
+        var userId = Guid.NewGuid();
+
+        await using var enumerator = sut.AskStreamingAsync(userId, new ChatRequest("Q?"), CancellationToken.None)
+            .GetAsyncEnumerator();
+
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.IsType<ChatStreamEvent.Meta>(enumerator.Current);
+
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.IsType<ChatStreamEvent.Token>(enumerator.Current);
+        Assert.Empty(await db.ChatMessages.ToListAsync()); // nothing persisted mid-stream
+
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.IsType<ChatStreamEvent.Token>(enumerator.Current);
+
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.IsType<ChatStreamEvent.Done>(enumerator.Current);
+
+        Assert.False(await enumerator.MoveNextAsync());
+
+        var messages = await db.ChatMessages.Where(m => m.UserId == userId).ToListAsync();
+        Assert.Equal(2, messages.Count);
+        Assert.Contains(messages, m => m.Role == ChatRoles.User && m.Message == "Q?");
+        Assert.Contains(messages, m => m.Role == ChatRoles.Assistant && m.Message == "Hello");
+    }
+
+    [Fact]
+    public async Task AskStreamingAsync_PersistenceFails_YieldsErrorInsteadOfDone_WithoutErasingPriorTokens()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        using var db = new ThrowingSaveDbContext(options);
+        var chatService = new FakeChatService { StreamTokens = new[] { "Hi" } };
+        var sut = CreateSut(db, chatService: chatService);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var evt in sut.AskStreamingAsync(Guid.NewGuid(), new ChatRequest("Q?"), CancellationToken.None))
+        {
+            events.Add(evt);
+        }
+
+        Assert.IsType<ChatStreamEvent.Meta>(events[0]);
+        var token = Assert.IsType<ChatStreamEvent.Token>(events[1]);
+        Assert.Equal("Hi", token.Text);
+        Assert.IsType<ChatStreamEvent.Error>(events[^1]);
+        Assert.DoesNotContain(events, e => e is ChatStreamEvent.Done);
+    }
 }

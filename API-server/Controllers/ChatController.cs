@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using ProductivityHub.Services;
 using System.Security.Claims;
+using System.Text.Json;
 using static ProductivityHub.DTOs.ChatDTOs;
 
 namespace ProductivityHub.Controllers
@@ -34,6 +36,59 @@ namespace ProductivityHub.Controllers
                     detail: "The AI service is currently unavailable. Please try again shortly.",
                     statusCode: StatusCodes.Status502BadGateway);
             }
+        }
+
+        [HttpPost("stream")]
+        [EnableRateLimiting("chat")]
+        public async Task StreamAsk(ChatRequest request, CancellationToken cancellationToken)
+        {
+            Response.ContentType = "text/event-stream";
+            Response.Headers.CacheControl = "no-cache";
+            HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+            try
+            {
+                await foreach (var evt in _chatOrchestrationService.AskStreamingAsync(GetUserId(), request, cancellationToken))
+                {
+                    switch (evt)
+                    {
+                        case ChatStreamEvent.Meta m:
+                            await WriteEventAsync("meta", new ChatStreamMetaEvent(m.Sources), cancellationToken);
+                            break;
+                        case ChatStreamEvent.Token t:
+                            await WriteEventAsync("token", new ChatStreamTokenEvent(t.Text), cancellationToken);
+                            break;
+                        case ChatStreamEvent.Error e:
+                            await WriteEventAsync("error", new ChatStreamErrorEvent(e.Message), cancellationToken);
+                            break;
+                        case ChatStreamEvent.Done:
+                            await WriteEventAsync("done", new { }, cancellationToken);
+                            break;
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Client disconnected — nothing left to write.
+            }
+            catch (Exception ex) when (ex is ChatGenerationException or EmbeddingGenerationException)
+            {
+                await WriteEventAsync(
+                    "error",
+                    new ChatStreamErrorEvent("The AI service is currently unavailable. Please try again shortly."),
+                    cancellationToken);
+            }
+        }
+
+        // Matches ASP.NET Core MVC's own JSON formatter default (camelCase) — Ok(response)
+        // results elsewhere in this API already serialize that way, and the Node relay/
+        // Socket.IO clients expect the same casing (e.g. payload.text, not payload.Text).
+        private static readonly JsonSerializerOptions SseJsonOptions = new(JsonSerializerDefaults.Web);
+
+        private async Task WriteEventAsync(string eventName, object payload, CancellationToken cancellationToken)
+        {
+            await Response.WriteAsync($"event: {eventName}\ndata: {JsonSerializer.Serialize(payload, SseJsonOptions)}\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
         }
 
         private Guid GetUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);

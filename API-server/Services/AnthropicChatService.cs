@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using ProductivityHub.Models;
@@ -78,6 +80,113 @@ namespace ProductivityHub.Services
             return answer;
         }
 
+        public async IAsyncEnumerable<string> StreamAnswerAsync(
+            string question, IReadOnlyList<NoteChunk> contextChunks,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            if (contextChunks.Count == 0)
+            {
+                _logger.LogInformation("No relevant note chunks found; streaming canned no-context response as a single token.");
+                yield return NoContextAnswer;
+                yield break;
+            }
+
+            var requestBody = new MessageRequest(
+                _options.Model,
+                _options.MaxTokens,
+                SystemPrompt,
+                new[] { new MessageParam(ChatRoles.User, BuildUserContent(question, contextChunks)) },
+                Stream: true);
+
+            // PostAsJsonAsync buffers the whole response body before returning, which would
+            // defeat streaming entirely — SendAsync + ResponseHeadersRead returns as soon as
+            // headers arrive so the SSE body can be read incrementally as bytes arrive.
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/messages")
+            {
+                Content = JsonContent.Create(requestBody)
+            };
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "Failed to reach the Anthropic API while streaming a chat answer.");
+                throw new ChatGenerationException("Could not reach the Anthropic API.", ex);
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogError(ex, "Anthropic API call timed out while streaming a chat answer.");
+                throw new ChatGenerationException("The Anthropic API did not respond in time.", ex);
+            }
+
+            using (response)
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogError("Anthropic streaming request failed with status {StatusCode}: {Body}", response.StatusCode, body);
+                    throw new ChatGenerationException($"Anthropic returned {(int)response.StatusCode} while streaming a chat answer.");
+                }
+
+                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                using var reader = new StreamReader(stream);
+
+                // Manual enumeration (not `await foreach`) so MoveNextAsync/Deserialize can be
+                // wrapped in a try/catch — `yield return` is illegal inside a try block that has
+                // a catch, so the yield happens after this block, never inside it (see below).
+                var frames = SseFrameParser.ExtractDataPayloads(ReadLinesAsync(reader, cancellationToken));
+                await using var enumerator = frames.GetAsyncEnumerator(cancellationToken);
+
+                while (true)
+                {
+                    StreamEnvelope? envelope;
+                    try
+                    {
+                        if (!await enumerator.MoveNextAsync())
+                        {
+                            break;
+                        }
+
+                        envelope = JsonSerializer.Deserialize<StreamEnvelope>(enumerator.Current);
+                    }
+                    catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        // Same distinction as the initial SendAsync catch: HttpClient.Timeout
+                        // also bounds reading the streamed body, not just the request headers.
+                        _logger.LogError(ex, "Anthropic API call timed out while reading a streamed chat answer.");
+                        throw new ChatGenerationException("The Anthropic API did not respond in time.", ex);
+                    }
+                    catch (Exception ex) when (ex is IOException or HttpRequestException or JsonException)
+                    {
+                        _logger.LogError(ex, "Lost connection to the Anthropic API while streaming a chat answer.");
+                        throw new ChatGenerationException("Lost connection to the Anthropic API while streaming.", ex);
+                    }
+
+                    if (envelope?.Type == "content_block_delta" && envelope.Delta?.Type == "text_delta"
+                        && !string.IsNullOrEmpty(envelope.Delta.Text))
+                    {
+                        yield return envelope.Delta.Text;
+                    }
+                    else if (envelope?.Type == "error")
+                    {
+                        throw new ChatGenerationException($"Anthropic streaming error: {envelope.Error?.Message ?? "unknown"}");
+                    }
+                }
+            }
+        }
+
+        private static async IAsyncEnumerable<string> ReadLinesAsync(
+            StreamReader reader, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            while (await reader.ReadLineAsync(cancellationToken) is { } line)
+            {
+                yield return line;
+            }
+        }
+
         public static string BuildUserContent(string question, IReadOnlyList<NoteChunk> contextChunks)
         {
             var contextBlock = string.Join("\n\n", contextChunks.Select((c, i) =>
@@ -90,7 +199,8 @@ namespace ProductivityHub.Services
             [property: JsonPropertyName("model")] string Model,
             [property: JsonPropertyName("max_tokens")] int MaxTokens,
             [property: JsonPropertyName("system")] string System,
-            [property: JsonPropertyName("messages")] MessageParam[] Messages);
+            [property: JsonPropertyName("messages")] MessageParam[] Messages,
+            [property: JsonPropertyName("stream")] bool Stream = false);
 
         private sealed record MessageParam(
             [property: JsonPropertyName("role")] string Role,
@@ -102,5 +212,17 @@ namespace ProductivityHub.Services
         private sealed record ContentBlock(
             [property: JsonPropertyName("type")] string Type,
             [property: JsonPropertyName("text")] string? Text);
+
+        private sealed record StreamEnvelope(
+            [property: JsonPropertyName("type")] string? Type,
+            [property: JsonPropertyName("delta")] StreamDelta? Delta,
+            [property: JsonPropertyName("error")] StreamError? Error);
+
+        private sealed record StreamDelta(
+            [property: JsonPropertyName("type")] string? Type,
+            [property: JsonPropertyName("text")] string? Text);
+
+        private sealed record StreamError(
+            [property: JsonPropertyName("message")] string? Message);
     }
 }
