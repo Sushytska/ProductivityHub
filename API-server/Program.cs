@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -43,6 +45,34 @@ builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>((sp, c
 
 builder.Services.AddHostedService<NoteEmbeddingBackgroundService>();
 
+builder.Services.Configure<AnthropicOptions>(builder.Configuration.GetSection("Anthropic"));
+builder.Services.AddScoped<IRagService, RagService>();
+builder.Services.AddHttpClient<IChatService, AnthropicChatService>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value;
+    var apiKey = builder.Configuration["Anthropic:ApiKey"]
+        ?? throw new InvalidOperationException("Anthropic:ApiKey is not configured (set via dotnet user-secrets).");
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.DefaultRequestHeaders.Add("x-api-key", apiKey);
+    client.DefaultRequestHeaders.Add("anthropic-version", options.ApiVersion);
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+builder.Services.AddScoped<ChatOrchestrationService>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // Bounds cost exposure on the paid Anthropic API: 10 chat requests per minute per user.
+    options.AddPolicy("chat", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+});
+
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -81,6 +111,7 @@ app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapControllers();
 

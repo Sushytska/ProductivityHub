@@ -56,11 +56,11 @@ This project is under active development. What's actually built so far vs. what'
 - ✅ JWT authentication (register / login)
 - ✅ Notes CRUD, scoped to the authenticated user
 - ✅ Background note chunking + embedding generation (Ollama `nomic-embed-text`, Redis-backed queue, retry with backoff)
+- ✅ RAG-powered AI chat (`POST /api/chat` — pgvector similarity search over your notes + Anthropic Claude for grounded answers)
 
 **Planned**
 - ⏳ Tasks
 - ⏳ Habit Tracker
-- ⏳ RAG-powered AI chat (the embeddings pipeline above only populates vectors — retrieval + chat generation don't exist yet)
 - ⏳ Streaming chat responses
 - ⏳ Frontend (Angular SPA)
 - ⏳ Realtime layer (Node.js)
