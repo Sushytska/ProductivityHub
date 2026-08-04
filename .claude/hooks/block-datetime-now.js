@@ -10,13 +10,16 @@ process.stdin.on("end", () => {
   } catch {
     process.exit(0);
   }
+  if (!input || typeof input !== "object") process.exit(0);
 
   const toolName = input.tool_name;
   if (toolName !== "Edit" && toolName !== "Write") process.exit(0);
 
+  // Lowercased: Windows filesystems are case-insensitive, so API-server/api-server
+  // must be treated as the same path.
   const filePath = (input.tool_input && input.tool_input.file_path) || "";
-  const normalized = filePath.replace(/\\/g, "/");
-  const isCsInSource = normalized.includes("API-server/") && normalized.endsWith(".cs");
+  const normalized = filePath.replace(/\\/g, "/").toLowerCase();
+  const isCsInSource = normalized.includes("api-server/") && normalized.endsWith(".cs");
   if (!isCsInSource) process.exit(0);
 
   const content =
