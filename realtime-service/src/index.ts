@@ -28,7 +28,8 @@ io.on("connection", (socket) => {
 
     inFlight = true;
     const controller = new AbortController();
-    socket.once("disconnect", () => controller.abort());
+    const onDisconnect = () => controller.abort();
+    socket.once("disconnect", onDisconnect);
 
     try {
       await relayChatStream(socket, socket.handshake.auth.token as string, question, controller.signal);
@@ -37,6 +38,7 @@ io.on("connection", (socket) => {
         socket.emit("chat:error", { message: "Failed to reach the chat service." });
       }
     } finally {
+      socket.off("disconnect", onDisconnect);
       inFlight = false;
     }
   });

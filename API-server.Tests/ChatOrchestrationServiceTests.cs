@@ -165,6 +165,34 @@ public class ChatOrchestrationServiceTests
     }
 
     [Fact]
+    public async Task AskStreamingAsync_ClientCancelsMidStream_SkipsPersistence()
+    {
+        using var db = CreateDbContext();
+        var chatService = new FakeChatService { StreamTokens = new[] { "Hel", "lo", " world" } };
+        var sut = CreateSut(db, chatService: chatService);
+        var userId = Guid.NewGuid();
+        using var cts = new CancellationTokenSource();
+
+        await using var enumerator = sut.AskStreamingAsync(userId, new ChatRequest("Q?"), cts.Token)
+            .GetAsyncEnumerator();
+
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.IsType<ChatStreamEvent.Meta>(enumerator.Current);
+
+        Assert.True(await enumerator.MoveNextAsync());
+        Assert.IsType<ChatStreamEvent.Token>(enumerator.Current);
+
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await enumerator.MoveNextAsync());
+
+        // No partial save: a cancelled/disconnected client must not leave a truncated
+        // answer persisted, unlike the SaveChangesAsync-fails case which does persist
+        // the user question and yields an Error event instead.
+        Assert.Empty(await db.ChatMessages.Where(m => m.UserId == userId).ToListAsync());
+    }
+
+    [Fact]
     public async Task AskStreamingAsync_PersistenceFails_YieldsErrorInsteadOfDone_WithoutErasingPriorTokens()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()

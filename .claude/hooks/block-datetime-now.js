@@ -1,6 +1,8 @@
 // PreToolUse hook (Edit|Write): blocks introducing DateTime.Now in API-server/**/*.cs.
 // Postgres columns are timestamp with time zone; Npgsql throws on insert for
 // DateTime.Kind = Local. Must use DateTime.UtcNow instead. See CLAUDE.md.
+const fs = require("fs");
+
 let raw = "";
 process.stdin.on("data", (chunk) => (raw += chunk));
 process.stdin.on("end", () => {
@@ -22,8 +24,31 @@ process.stdin.on("end", () => {
   const isCsInSource = normalized.includes("api-server/") && normalized.endsWith(".cs");
   if (!isCsInSource) process.exit(0);
 
-  const content =
-    (input.tool_input && (input.tool_input.content ?? input.tool_input.new_string)) || "";
+  const toolInput = input.tool_input || {};
+
+  let content;
+  if (toolName === "Write") {
+    content = toolInput.content || "";
+  } else {
+    // Edit's new_string alone can omit context that identifies the surrounding
+    // property/expression, so reconstruct the resulting file content instead of
+    // scanning new_string in isolation (matches block-anthropic-key.js).
+    let existing = "";
+    try {
+      existing = fs.readFileSync(filePath, "utf8");
+    } catch {
+      existing = "";
+    }
+    const oldString = toolInput.old_string ?? "";
+    const newString = toolInput.new_string ?? "";
+    if (existing && oldString && existing.includes(oldString)) {
+      content = toolInput.replace_all
+        ? existing.split(oldString).join(newString)
+        : existing.replace(oldString, newString);
+    } else {
+      content = `${existing}\n${newString}`;
+    }
+  }
 
   if (/\bDateTime\.Now\b/.test(content)) {
     console.log(

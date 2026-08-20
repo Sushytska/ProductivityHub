@@ -24,6 +24,8 @@ export async function relayChatStream(
   });
 
   if (!res.ok || !res.body) {
+    // Release the connection back to the pool instead of leaving it unconsumed.
+    await res.body?.cancel();
     socket.emit("chat:error", { message: `Upstream API returned ${res.status}` });
     return;
   }
@@ -33,7 +35,13 @@ export async function relayChatStream(
       if (!event.event || !KNOWN_EVENTS.has(event.event)) {
         return;
       }
-      const payload = event.data ? JSON.parse(event.data) : {};
+      let payload: unknown = {};
+      try {
+        payload = event.data ? JSON.parse(event.data) : {};
+      } catch {
+        socket.emit("chat:error", { message: "Received a malformed event from the chat service." });
+        return;
+      }
       socket.emit(`chat:${event.event}`, payload);
     },
   });

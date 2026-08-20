@@ -39,10 +39,15 @@ process.stdin.on("end", () => {
     }
     const oldString = toolInput.old_string ?? "";
     const newString = toolInput.new_string ?? "";
-    content =
-      existing && existing.includes(oldString)
-        ? existing.replace(oldString, newString)
-        : `${existing}\n${newString}`;
+    if (existing && oldString && existing.includes(oldString)) {
+      // Use a global replace (or honor an explicit replace_all) so a non-unique
+      // old_string doesn't leave a later, actually-edited occurrence unaccounted for.
+      content = toolInput.replace_all
+        ? existing.split(oldString).join(newString)
+        : existing.replace(oldString, newString);
+    } else {
+      content = `${existing}\n${newString}`;
+    }
   }
 
   // Case-insensitive: ASP.NET Core config binding matches property names

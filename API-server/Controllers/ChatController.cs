@@ -15,10 +15,12 @@ namespace ProductivityHub.Controllers
     public class ChatController : ControllerBase
     {
         private readonly ChatOrchestrationService _chatOrchestrationService;
+        private readonly ILogger<ChatController> _logger;
 
-        public ChatController(ChatOrchestrationService chatOrchestrationService)
+        public ChatController(ChatOrchestrationService chatOrchestrationService, ILogger<ChatController> logger)
         {
             _chatOrchestrationService = chatOrchestrationService;
+            _logger = logger;
         }
 
         [HttpPost]
@@ -73,10 +75,28 @@ namespace ProductivityHub.Controllers
             }
             catch (Exception ex) when (ex is ChatGenerationException or EmbeddingGenerationException)
             {
-                await WriteEventAsync(
-                    "error",
-                    new ChatStreamErrorEvent("The AI service is currently unavailable. Please try again shortly."),
-                    cancellationToken);
+                await TryWriteErrorEventAsync(
+                    "The AI service is currently unavailable. Please try again shortly.", cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // A streaming response may already have flushed SSE frames, so this can't be
+                // turned into a normal 5xx status — best-effort notify the client instead of
+                // letting the connection truncate silently with only server-side logging.
+                _logger.LogError(ex, "Unhandled error while streaming a chat answer.");
+                await TryWriteErrorEventAsync("An unexpected error occurred. Please try again shortly.", cancellationToken);
+            }
+        }
+
+        private async Task TryWriteErrorEventAsync(string message, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await WriteEventAsync("error", new ChatStreamErrorEvent(message), cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to write an SSE error frame after streaming failure.");
             }
         }
 

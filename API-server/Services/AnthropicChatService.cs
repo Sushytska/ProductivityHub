@@ -140,6 +140,13 @@ namespace ProductivityHub.Services
                 var frames = SseFrameParser.ExtractDataPayloads(ReadLinesAsync(reader, cancellationToken));
                 await using var enumerator = frames.GetAsyncEnumerator(cancellationToken);
 
+                // Anthropic always terminates a successful stream with a "message_stop" frame.
+                // The underlying HTTP body can end (MoveNextAsync -> false) without one ever
+                // arriving — e.g. an idle-timeout or proxy closing the connection mid-response —
+                // in which case the answer collected so far is truncated, not complete, and must
+                // not be treated (and persisted) as a normal finish.
+                var sawMessageStop = false;
+
                 while (true)
                 {
                     StreamEnvelope? envelope;
@@ -170,10 +177,20 @@ namespace ProductivityHub.Services
                     {
                         yield return envelope.Delta.Text;
                     }
+                    else if (envelope?.Type == "message_stop")
+                    {
+                        sawMessageStop = true;
+                    }
                     else if (envelope?.Type == "error")
                     {
                         throw new ChatGenerationException($"Anthropic streaming error: {envelope.Error?.Message ?? "unknown"}");
                     }
+                }
+
+                if (!sawMessageStop)
+                {
+                    _logger.LogError("Anthropic stream ended without a message_stop frame; treating as a truncated response.");
+                    throw new ChatGenerationException("The Anthropic stream ended before completion.");
                 }
             }
         }
