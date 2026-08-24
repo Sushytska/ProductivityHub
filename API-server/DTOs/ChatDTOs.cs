@@ -9,5 +9,11 @@ namespace ProductivityHub.DTOs
         public record ChatResponse(string Answer, DateTime CreatedDate, IReadOnlyList<ChatSourceResponse> Sources);
 
         public record ChatSourceResponse(Guid NoteId, string NoteTitle, int ChunkIndex);
+
+        public record ChatStreamMetaEvent(IReadOnlyList<ChatSourceResponse> Sources);
+
+        public record ChatStreamTokenEvent(string Text);
+
+        public record ChatStreamErrorEvent(string Message);
     }
 }

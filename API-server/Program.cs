@@ -55,7 +55,10 @@ builder.Services.AddHttpClient<IChatService, AnthropicChatService>((sp, client) 
     client.BaseAddress = new Uri(options.BaseUrl);
     client.DefaultRequestHeaders.Add("x-api-key", apiKey);
     client.DefaultRequestHeaders.Add("anthropic-version", options.ApiVersion);
-    client.Timeout = TimeSpan.FromSeconds(60);
+    // 120s covers both the non-streaming call and the (typically longer-running) streamed
+    // call — HttpClient.Timeout bounds the whole operation including reading a streamed
+    // body, not just headers.
+    client.Timeout = TimeSpan.FromSeconds(120);
 });
 builder.Services.AddScoped<ChatOrchestrationService>();
 
