@@ -364,3 +364,6 @@ FodyWeavers.xsd
 
 # Claude Code project notes (local only, not committed yet)
 CLAUDE.md
+
+# Local secrets for docker-compose (e.g. API-server/.env — see .env.example)
+.env

@@ -110,7 +110,13 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// Skip in the Docker environment: the api compose service runs HTTP-only
+// (ASPNETCORE_URLS=http://+:8080, no HTTPS port), so redirection has nowhere
+// to redirect to and would just log a warning on every request.
+if (!app.Environment.IsEnvironment("Docker"))
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
