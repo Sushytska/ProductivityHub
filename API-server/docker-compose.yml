@@ -10,12 +10,95 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d productivity_hub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
     container_name: productivity_hub_redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: API-server/Dockerfile
+    container_name: productivity_hub_api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ASPNETCORE_URLS: http://+:8080
+      # Empty default (not a hard `:?` requirement) so `docker compose up` still
+      # works without a key set — matches native dev, which only throws on the
+      # first /api/chat request, not at startup.
+      Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
+      # Defaults to the host's natively-running `ollama serve` (see CLAUDE.md for
+      # why Ollama isn't containerized by default). Only set OLLAMA_BASE_URL (e.g.
+      # in .env) if you're also running `--profile with-ollama`, in which case set
+      # it to http://ollama:11434 to reach that container instead.
+      Ollama__BaseUrl: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      # host.docker.internal is automatic on Docker Desktop (Windows/Mac) but needs
+      # this explicit mapping on native Linux Docker Engine (20.10+).
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  realtime-service:
+    build:
+      context: ../realtime-service
+      dockerfile: Dockerfile
+    container_name: productivity_hub_realtime
+    environment:
+      DOTNET_API_BASE_URL: http://api:8080
+      PORT: 4000
+      CORS_ORIGIN: ${REALTIME_CORS_ORIGIN:-*}
+    ports:
+      - "4000:4000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: productivity_hub_nginx
+    ports:
+      # Change the host side (e.g. "8000:80") if port 80 is already taken —
+      # IIS or another local service commonly binds it on Windows.
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      realtime-service:
+        condition: service_started
+
+  # Opt-in only: `docker compose --profile with-ollama up -d`. Off by default —
+  # Ollama is deliberately run natively on the host (see CLAUDE.md) to avoid the
+  # same class of host-port-conflict bug already hit with native Postgres on 5432.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: productivity_hub_ollama
+    profiles: ["with-ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
 
 volumes:
   postgres_data:
+  ollama_data:

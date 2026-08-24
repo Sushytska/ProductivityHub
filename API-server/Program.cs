@@ -50,8 +50,17 @@ builder.Services.AddScoped<IRagService, RagService>();
 builder.Services.AddHttpClient<IChatService, AnthropicChatService>((sp, client) =>
 {
     var options = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value;
-    var apiKey = builder.Configuration["Anthropic:ApiKey"]
-        ?? throw new InvalidOperationException("Anthropic:ApiKey is not configured (set via dotnet user-secrets).");
+    // IsNullOrEmpty (not `?? throw`/null-check): in the Docker environment, Anthropic__ApiKey
+    // is always defined as a container env var (defaulting to "" when ANTHROPIC_API_KEY isn't
+    // set — see docker-compose.yml), so Configuration[...] returns "" rather than null and a
+    // plain null-check would silently let a blank key through to Anthropic instead of failing
+    // fast here.
+    var apiKey = builder.Configuration["Anthropic:ApiKey"];
+    if (string.IsNullOrEmpty(apiKey))
+    {
+        throw new InvalidOperationException(
+            "Anthropic:ApiKey is not configured (set via dotnet user-secrets, or ANTHROPIC_API_KEY in API-server/.env for Docker).");
+    }
     client.BaseAddress = new Uri(options.BaseUrl);
     client.DefaultRequestHeaders.Add("x-api-key", apiKey);
     client.DefaultRequestHeaders.Add("anthropic-version", options.ApiVersion);
@@ -110,11 +119,23 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// Skip in the Docker environment: the api compose service runs HTTP-only
+// (ASPNETCORE_URLS=http://+:8080, no HTTPS port), so redirection has nowhere
+// to redirect to and would just log a warning on every request.
+if (!app.Environment.IsEnvironment("Docker"))
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+
+// Unauthenticated liveness check — used by the Dockerfile's HEALTHCHECK so
+// docker-compose's `depends_on: condition: service_healthy` can gate nginx/
+// realtime-service on Kestrel actually accepting connections, not just the
+// api container having started.
+app.MapGet("/healthz", () => Results.Ok());
 
 app.MapControllers();
 
