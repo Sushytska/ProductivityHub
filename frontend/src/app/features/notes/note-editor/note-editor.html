@@ -1,0 +1,32 @@
+<div class="note-editor-page">
+  @if (loading()) {
+    <p>Loading…</p>
+  } @else if (notFound()) {
+    <p>Note not found.</p>
+    <a routerLink="/notes">Back to notes</a>
+  } @else {
+    <h1>{{ noteId ? 'Edit note' : 'New note' }}</h1>
+    <form (ngSubmit)="save()">
+      <label>
+        Title
+        <input type="text" name="title" [(ngModel)]="title" required />
+      </label>
+      <label>
+        Content
+        <textarea name="content" [(ngModel)]="content" rows="14" required></textarea>
+      </label>
+
+      @if (errorMessage()) {
+        <p class="error">{{ errorMessage() }}</p>
+      }
+
+      <div class="actions">
+        <button type="submit" [disabled]="saving()">{{ saving() ? 'Saving…' : 'Save' }}</button>
+        <a routerLink="/notes" class="button secondary">Cancel</a>
+        @if (noteId) {
+          <button type="button" class="danger" (click)="delete()">Delete</button>
+        }
+      </div>
+    </form>
+  }
+</div>

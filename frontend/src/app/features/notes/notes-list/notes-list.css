@@ -1,0 +1,41 @@
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.notes-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+}
+
+.note-row {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--color-text);
+}
+
+.note-row:hover {
+  text-decoration: none;
+}
+
+.note-title {
+  font-weight: 500;
+}
+
+.note-date {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}

@@ -1,0 +1,16 @@
+<header class="app-header">
+  <nav>
+    <a routerLink="/notes" class="brand">ProductivityHub</a>
+    @if (auth.isAuthenticated()) {
+      <div class="nav-links">
+        <a routerLink="/notes">Notes</a>
+        <a routerLink="/chat">Chat</a>
+        <button type="button" (click)="logout()">Logout</button>
+      </div>
+    }
+  </nav>
+</header>
+
+<main>
+  <router-outlet></router-outlet>
+</main>

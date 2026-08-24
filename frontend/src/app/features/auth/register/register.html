@@ -1,0 +1,22 @@
+<div class="auth-page">
+  <h1>Register</h1>
+  <form (ngSubmit)="submit()">
+    <label>
+      Email
+      <input type="email" name="email" [(ngModel)]="email" required autocomplete="email" />
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" [(ngModel)]="password" required autocomplete="new-password" />
+    </label>
+
+    @if (errorMessage()) {
+      <p class="error">{{ errorMessage() }}</p>
+    }
+
+    <button type="submit" [disabled]="submitting()">
+      {{ submitting() ? 'Creating account…' : 'Register' }}
+    </button>
+  </form>
+  <p class="auth-switch">Already have an account? <a routerLink="/login">Log in</a></p>
+</div>
