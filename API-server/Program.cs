@@ -19,6 +19,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<NoteService>();
+builder.Services.AddScoped<TaskService>();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 {
@@ -36,6 +37,10 @@ builder.Services.AddSingleton<INoteEmbeddingQueue, NoteEmbeddingQueue>();
 builder.Services.AddScoped<NoteEmbeddingProcessor>();
 builder.Services.AddScoped<StrandedNoteReconciler>();
 
+builder.Services.AddSingleton<ITaskEmbeddingQueue, TaskEmbeddingQueue>();
+builder.Services.AddScoped<TaskEmbeddingProcessor>();
+builder.Services.AddScoped<StrandedTaskReconciler>();
+
 builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>((sp, client) =>
 {
     var options = sp.GetRequiredService<IOptions<OllamaOptions>>().Value;
@@ -44,6 +49,7 @@ builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>((sp, c
 });
 
 builder.Services.AddHostedService<NoteEmbeddingBackgroundService>();
+builder.Services.AddHostedService<TaskEmbeddingBackgroundService>();
 
 builder.Services.Configure<AnthropicOptions>(builder.Configuration.GetSection("Anthropic"));
 builder.Services.AddScoped<IRagService, RagService>();

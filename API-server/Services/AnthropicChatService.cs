@@ -10,12 +10,12 @@ namespace ProductivityHub.Services
     public class AnthropicChatService : IChatService
     {
         public const string NoContextAnswer =
-            "I don't have any notes that seem relevant to that question yet.";
+            "I don't have any notes or tasks that seem relevant to that question yet.";
 
         private const string SystemPrompt =
-            "You are a personal assistant answering questions using only the user's own notes provided in this " +
-            "conversation. Ground your answer in the provided notes. If the notes don't contain the answer, say so " +
-            "honestly rather than guessing.";
+            "You are a personal assistant answering questions using only the user's own notes and tasks provided " +
+            "in this conversation. Ground your answer in the provided notes and tasks. If they don't contain the " +
+            "answer, say so honestly rather than guessing.";
 
         private readonly HttpClient _httpClient;
         private readonly AnthropicOptions _options;
@@ -29,11 +29,11 @@ namespace ProductivityHub.Services
         }
 
         public async Task<string> GetAnswerAsync(
-            string question, IReadOnlyList<NoteChunk> contextChunks, CancellationToken cancellationToken = default)
+            string question, IReadOnlyList<RagSourceItem> contextItems, CancellationToken cancellationToken = default)
         {
-            if (contextChunks.Count == 0)
+            if (contextItems.Count == 0)
             {
-                _logger.LogInformation("No relevant note chunks found; returning canned no-context response.");
+                _logger.LogInformation("No relevant notes or tasks found; returning canned no-context response.");
                 return NoContextAnswer;
             }
 
@@ -41,7 +41,7 @@ namespace ProductivityHub.Services
                 _options.Model,
                 _options.MaxTokens,
                 SystemPrompt,
-                new[] { new MessageParam(ChatRoles.User, BuildUserContent(question, contextChunks)) });
+                new[] { new MessageParam(ChatRoles.User, BuildUserContent(question, contextItems)) });
 
             HttpResponseMessage response;
             try
@@ -81,12 +81,12 @@ namespace ProductivityHub.Services
         }
 
         public async IAsyncEnumerable<string> StreamAnswerAsync(
-            string question, IReadOnlyList<NoteChunk> contextChunks,
+            string question, IReadOnlyList<RagSourceItem> contextItems,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            if (contextChunks.Count == 0)
+            if (contextItems.Count == 0)
             {
-                _logger.LogInformation("No relevant note chunks found; streaming canned no-context response as a single token.");
+                _logger.LogInformation("No relevant notes or tasks found; streaming canned no-context response as a single token.");
                 yield return NoContextAnswer;
                 yield break;
             }
@@ -95,7 +95,7 @@ namespace ProductivityHub.Services
                 _options.Model,
                 _options.MaxTokens,
                 SystemPrompt,
-                new[] { new MessageParam(ChatRoles.User, BuildUserContent(question, contextChunks)) },
+                new[] { new MessageParam(ChatRoles.User, BuildUserContent(question, contextItems)) },
                 Stream: true);
 
             // PostAsJsonAsync buffers the whole response body before returning, which would
@@ -204,10 +204,10 @@ namespace ProductivityHub.Services
             }
         }
 
-        public static string BuildUserContent(string question, IReadOnlyList<NoteChunk> contextChunks)
+        public static string BuildUserContent(string question, IReadOnlyList<RagSourceItem> contextItems)
         {
-            var contextBlock = string.Join("\n\n", contextChunks.Select((c, i) =>
-                $"[Note {i + 1} - \"{c.Note.Title}\"]\n{c.ChunkText}"));
+            var contextBlock = string.Join("\n\n", contextItems.Select((item, i) =>
+                $"[{item.SourceType} {i + 1} - \"{item.Title}\"]\n{item.Text}"));
 
             return $"{contextBlock}\n\nQuestion: {question}";
         }

@@ -1,18 +1,14 @@
 using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using ProductivityHub.Models;
 using ProductivityHub.Services;
 
 namespace ProductivityHub.Tests;
 
 public class AnthropicChatServiceTests
 {
-    private static IReadOnlyList<NoteChunk> OneChunk()
-    {
-        var note = new Note { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Title = "Note", Content = "..." };
-        return new[] { new NoteChunk { Id = Guid.NewGuid(), NoteId = note.Id, ChunkText = "text", ChunkIndex = 0, Note = note } };
-    }
+    private static IReadOnlyList<RagSourceItem> OneSourceItem() =>
+        new[] { new RagSourceItem("Note", Guid.NewGuid(), "Note", "text", 0, Distance: 0.0) };
 
     private static AnthropicChatService CreateSut(Func<HttpRequestMessage, HttpResponseMessage> responder)
     {
@@ -38,22 +34,22 @@ public class AnthropicChatServiceTests
     }
 
     [Fact]
-    public void BuildUserContent_IncludesQuestionAndAllChunkText()
+    public void BuildUserContent_IncludesQuestionAndAllItemText()
     {
-        var noteA = new Note { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Title = "Note A", Content = "..." };
-        var noteB = new Note { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Title = "Note B", Content = "..." };
-        var chunks = new List<NoteChunk>
+        var items = new List<RagSourceItem>
         {
-            new() { Id = Guid.NewGuid(), NoteId = noteA.Id, ChunkText = "First chunk text", ChunkIndex = 0, Note = noteA },
-            new() { Id = Guid.NewGuid(), NoteId = noteB.Id, ChunkText = "Second chunk text", ChunkIndex = 0, Note = noteB },
+            new("Note", Guid.NewGuid(), "Note A", "First chunk text", 0, Distance: 0.0),
+            new("Task", Guid.NewGuid(), "Task B", "Second item text", 0, Distance: 0.1),
         };
 
-        var result = AnthropicChatService.BuildUserContent("What is X?", chunks);
+        var result = AnthropicChatService.BuildUserContent("What is X?", items);
 
         Assert.Contains("Note A", result);
         Assert.Contains("First chunk text", result);
-        Assert.Contains("Note B", result);
-        Assert.Contains("Second chunk text", result);
+        Assert.Contains("Task B", result);
+        Assert.Contains("Second item text", result);
+        Assert.Contains("[Note 1", result);
+        Assert.Contains("[Task 2", result);
         Assert.Contains("What is X?", result);
     }
 
@@ -66,7 +62,7 @@ public class AnthropicChatServiceTests
         var options = Options.Create(new AnthropicOptions());
         var sut = new AnthropicChatService(httpClient, options, NullLogger<AnthropicChatService>.Instance);
 
-        var result = await sut.GetAnswerAsync("Anything", Array.Empty<NoteChunk>());
+        var result = await sut.GetAnswerAsync("Anything", Array.Empty<RagSourceItem>());
 
         Assert.Equal(AnthropicChatService.NoContextAnswer, result);
     }
@@ -83,7 +79,7 @@ public class AnthropicChatServiceTests
             "data: {\"type\":\"message_stop\"}\n\n";
         var sut = CreateSut(_ => SseResponse(body));
 
-        var tokens = await CollectTokensAsync(sut.StreamAnswerAsync("Q?", OneChunk()));
+        var tokens = await CollectTokensAsync(sut.StreamAnswerAsync("Q?", OneSourceItem()));
 
         Assert.Equal(new[] { "Hel", "lo" }, tokens);
     }
@@ -101,7 +97,7 @@ public class AnthropicChatServiceTests
         var tokens = new List<string>();
         var ex = await Assert.ThrowsAsync<ChatGenerationException>(async () =>
         {
-            await foreach (var token in sut.StreamAnswerAsync("Q?", OneChunk()))
+            await foreach (var token in sut.StreamAnswerAsync("Q?", OneSourceItem()))
             {
                 tokens.Add(token);
             }
@@ -118,7 +114,7 @@ public class AnthropicChatServiceTests
         var sut = CreateSut(_ => SseResponse(body));
 
         var ex = await Assert.ThrowsAsync<ChatGenerationException>(
-            async () => await CollectTokensAsync(sut.StreamAnswerAsync("Q?", OneChunk())));
+            async () => await CollectTokensAsync(sut.StreamAnswerAsync("Q?", OneSourceItem())));
 
         Assert.Contains("boom", ex.Message);
     }
@@ -132,7 +128,7 @@ public class AnthropicChatServiceTests
         });
 
         await Assert.ThrowsAsync<ChatGenerationException>(
-            async () => await CollectTokensAsync(sut.StreamAnswerAsync("Q?", OneChunk())));
+            async () => await CollectTokensAsync(sut.StreamAnswerAsync("Q?", OneSourceItem())));
     }
 
     [Fact]
@@ -141,7 +137,7 @@ public class AnthropicChatServiceTests
         var called = false;
         var sut = CreateSut(_ => { called = true; return SseResponse(""); });
 
-        var tokens = await CollectTokensAsync(sut.StreamAnswerAsync("Q?", Array.Empty<NoteChunk>()));
+        var tokens = await CollectTokensAsync(sut.StreamAnswerAsync("Q?", Array.Empty<RagSourceItem>()));
 
         Assert.Equal(new[] { AnthropicChatService.NoContextAnswer }, tokens);
         Assert.False(called);

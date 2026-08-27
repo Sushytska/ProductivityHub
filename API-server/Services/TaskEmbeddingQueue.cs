@@ -3,37 +3,31 @@ using StackExchange.Redis;
 
 namespace ProductivityHub.Services
 {
-    public class NoteEmbeddingQueue : INoteEmbeddingQueue, IDisposable
+    public class TaskEmbeddingQueue : ITaskEmbeddingQueue, IDisposable
     {
-        private const string QueueKey = "note-embedding-queue";
+        private const string QueueKey = "task-embedding-queue";
         private const string BlockingTimeoutSeconds = "5";
 
         private readonly IConnectionMultiplexer _redis;
         private readonly ConnectionMultiplexer _blockingRedis;
 
-        public NoteEmbeddingQueue(IConnectionMultiplexer redis, IConfiguration configuration)
+        public TaskEmbeddingQueue(IConnectionMultiplexer redis, IConfiguration configuration)
         {
             _redis = redis;
 
-            // A dedicated connection for BLPOP only: Redis processes commands on a given
-            // connection strictly in order, so a blocking command occupies that connection
-            // for its whole wait window — any other command sent on the SAME connection
-            // (including a plain Enqueue's RPUSH, from this class or TaskEmbeddingQueue) has
-            // to wait for it to resolve first. With two background services each running a
-            // near-continuous 5s-timeout BLPOP loop against the shared IConnectionMultiplexer,
-            // ordinary Enqueue calls were observed stalling ~5s each. Enqueue (RPUSH, fast,
-            // non-blocking) still uses the shared multiplexer; only the blocking loop gets its
-            // own connection.
+            // Dedicated connection for BLPOP only — see NoteEmbeddingQueue for why: sharing one
+            // connection between a near-continuous blocking poll loop and ordinary Enqueue
+            // (RPUSH) calls serializes the RPUSH behind whichever BLPOP happens to be in flight.
             var options = ConfigurationOptions.Parse(configuration["Redis:ConnectionString"]!);
             options.SyncTimeout = 10000;
             options.AsyncTimeout = 10000;
             _blockingRedis = ConnectionMultiplexer.Connect(options);
         }
 
-        public void Enqueue(Guid noteId)
+        public void Enqueue(Guid taskId)
         {
             var db = _redis.GetDatabase();
-            db.ListRightPush(QueueKey, noteId.ToString());
+            db.ListRightPush(QueueKey, taskId.ToString());
         }
 
         public async IAsyncEnumerable<Guid> DequeueAllAsync([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -71,9 +65,9 @@ namespace ProductivityHub.Services
                     continue;
                 }
 
-                if (Guid.TryParse(values[1].ToString(), out var noteId))
+                if (Guid.TryParse(values[1].ToString(), out var taskId))
                 {
-                    yield return noteId;
+                    yield return taskId;
                 }
             }
         }

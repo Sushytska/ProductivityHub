@@ -1,0 +1,56 @@
+.tasks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tasks-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+}
+
+.tasks-list li input[type='checkbox'] {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.task-row {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--color-text);
+}
+
+.task-row:hover {
+  text-decoration: none;
+}
+
+.task-title {
+  font-weight: 500;
+}
+
+.task-due {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.tasks-list li.completed .task-title {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+.tasks-list li.completed {
+  opacity: 0.7;
+}

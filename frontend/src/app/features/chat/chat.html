@@ -16,8 +16,8 @@
         <p>{{ message.text }}</p>
         @if (message.sources && message.sources.length > 0) {
           <ul class="sources">
-            @for (source of message.sources; track source.noteId) {
-              <li>{{ source.noteTitle }}</li>
+            @for (source of message.sources; track source.sourceId) {
+              <li><span class="source-type">{{ source.sourceType }}</span> {{ source.sourceTitle }}</li>
             }
           </ul>
         }

@@ -1,0 +1,34 @@
+<div class="tasks-page">
+  <div class="page-header">
+    <h1>Tasks</h1>
+    <a routerLink="/tasks/new" class="button">New task</a>
+  </div>
+
+  @if (loading()) {
+    <p>Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  } @else if (tasks().length === 0) {
+    <p>No tasks yet.</p>
+  } @else {
+    <ul class="tasks-list">
+      @for (task of tasks(); track task.id) {
+        <li [class.completed]="task.isCompleted">
+          <input
+            type="checkbox"
+            [checked]="task.isCompleted"
+            (change)="toggleCompleted(task)"
+            [attr.aria-label]="'Mark \'' + task.title + '\' as ' + (task.isCompleted ? 'not completed' : 'completed')"
+          />
+          <a [routerLink]="['/tasks', task.id]" class="task-row">
+            <span class="task-title">{{ task.title }}</span>
+            @if (task.dueDate) {
+              <span class="task-due">Due {{ task.dueDate }}</span>
+            }
+          </a>
+          <button type="button" class="danger" (click)="deleteTask(task.id, $event)">Delete</button>
+        </li>
+      }
+    </ul>
+  }
+</div>

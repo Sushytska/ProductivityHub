@@ -31,6 +31,25 @@ export const routes: Routes = [
       import('./features/notes/notes-list/notes-list').then((m) => m.NotesList),
     canActivate: [authGuard],
   },
+  // tasks/new must come before tasks/:id for the same reason as notes/new above.
+  {
+    path: 'tasks/new',
+    loadComponent: () =>
+      import('./features/tasks/task-editor/task-editor').then((m) => m.TaskEditor),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'tasks/:id',
+    loadComponent: () =>
+      import('./features/tasks/task-editor/task-editor').then((m) => m.TaskEditor),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'tasks',
+    loadComponent: () =>
+      import('./features/tasks/tasks-list/tasks-list').then((m) => m.TasksList),
+    canActivate: [authGuard],
+  },
   {
     path: 'chat',
     loadComponent: () => import('./features/chat/chat').then((m) => m.Chat),
