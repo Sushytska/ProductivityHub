@@ -1,0 +1,26 @@
+<div class="notes-page">
+  <div class="page-header">
+    <h1>Notes</h1>
+    <a routerLink="/notes/new" class="button">New note</a>
+  </div>
+
+  @if (loading()) {
+    <p>Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  } @else if (notes().length === 0) {
+    <p>No notes yet.</p>
+  } @else {
+    <ul class="notes-list">
+      @for (note of notes(); track note.id) {
+        <li>
+          <a [routerLink]="['/notes', note.id]" class="note-row">
+            <span class="note-title">{{ note.title }}</span>
+            <span class="note-date">{{ note.createdDate | date: 'medium' }}</span>
+          </a>
+          <button type="button" class="danger" (click)="deleteNote(note.id, $event)">Delete</button>
+        </li>
+      }
+    </ul>
+  }
+</div>
