@@ -14,6 +14,8 @@ namespace ProductivityHub.Database
 
         public DbSet<NoteChunk> NoteChunks { get; set; }
 
+        public DbSet<TaskItem> Tasks { get; set; }
+
         public DbSet<ChatMessage> ChatMessages { get; set; }
 
         public DbSet<User> Users { get; set; }
@@ -33,9 +35,18 @@ namespace ProductivityHub.Database
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
-            modelBuilder.Entity<NoteChunk>()
-                .Property(nc => nc.Embedding)
-                .HasColumnType("vector(768)");
+            modelBuilder.Entity<NoteChunk>(entity =>
+            {
+                entity.Property(nc => nc.Embedding).HasColumnType("vector(768)");
+                entity.HasIndex(nc => nc.Embedding).HasMethod("hnsw").HasOperators("vector_cosine_ops");
+            });
+
+            modelBuilder.Entity<TaskItem>(entity =>
+            {
+                entity.Property(t => t.EmbeddingStatus).HasConversion<string>();
+                entity.Property(t => t.Embedding).HasColumnType("vector(768)");
+                entity.HasIndex(t => t.Embedding).HasMethod("hnsw").HasOperators("vector_cosine_ops");
+            });
         }
     }
 }

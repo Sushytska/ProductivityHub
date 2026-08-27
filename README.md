@@ -56,14 +56,15 @@ This project is under active development. What's actually built so far vs. what'
 - ✅ JWT authentication (register / login)
 - ✅ Notes CRUD, scoped to the authenticated user
 - ✅ Background note chunking + embedding generation (Ollama `nomic-embed-text`, Redis-backed queue, retry with backoff)
-- ✅ RAG-powered AI chat (`POST /api/chat` — pgvector similarity search over your notes + Anthropic Claude for grounded answers)
+- ✅ RAG-powered AI chat (`POST /api/chat` — pgvector similarity search over your notes *and* tasks, ranked and merged together, + Anthropic Claude for grounded answers — e.g. "when is my electricity bill due?" is answered from a Task, "what did I write about Docker?" from a Note)
 - ✅ Streaming chat responses (`POST /api/chat/stream`, Server-Sent Events)
 - ✅ Realtime layer (Node.js + Socket.IO relay in `realtime-service/`, consuming the SSE endpoint)
 - ✅ Frontend (Angular SPA in `frontend/`) — login/register, notes list + editor, and a chat interface streaming answers via `realtime-service` over Socket.IO
 - ✅ Full-stack Docker Compose (`API-server/docker-compose.yml`) — Postgres, Redis, the API, `realtime-service`, and Nginx (serving the Angular build and reverse-proxying `/api` and `/socket.io`), plus an opt-in containerized Ollama
+- ✅ Tasks CRUD (`api/Tasks`), scoped to the authenticated user, with a due date, a completed flag, and a matching Angular list/editor UI (inline complete-toggle, incomplete-first sorting), plus its own embedding pipeline (title + status + due date + description) feeding the same RAG chat as notes
+- ✅ HNSW indexes (`vector_cosine_ops`) on both `NoteChunks.Embedding` and `Tasks.Embedding` — similarity search no longer falls back to a sequential scan
 
 **Planned**
-- ⏳ Tasks
 - ⏳ Habit Tracker
 
 ---
@@ -75,7 +76,7 @@ The embedding pipeline is a personal-project MVP, not a production-hardened job 
 - **Migration isn't safe on databases with existing embeddings.** The `vector(1536)` → `vector(768)` column change in `AddEmbeddingPipelineColumns` has no data-clearing step; pgvector rejects the in-place resize if any `NoteChunk` rows already have a 1536-dim vector. Harmless on a fresh database (this repo's own migration history), but re-running the embedding pipeline's schema migrations against an environment that already embedded notes under the old dimension will fail and needs manual intervention (clear the `NoteChunks` table first).
 - **Race condition on concurrent edit + processing.** `Note` has no optimistic-concurrency token. If a note is edited while the background worker is still embedding an earlier version of it, the worker's completion write can overwrite the user's fresh `Pending` status with `Completed` — leaving the note briefly marked done with embeddings from the *previous* content. Self-heals on the next processing pass (the edit's own re-enqueue still runs), since only one worker instance exists today; would need a concurrency token if the worker were ever scaled out.
 - **Redundant Ollama calls on rapid edits.** `NoteService.UpdateAsync` re-enqueues on every save with no dedup — editing the same note several times in quick succession queues one embedding job per save, each fully re-chunking and re-embedding. Wasted work, not incorrect behavior; not worth a dedup layer for single-user local use.
-- **No relevance cutoff on RAG retrieval.** `RagService` always returns up to its top-K chunks if the user has *any* embedded notes, even for an unrelated question — there's no cosine-distance threshold. The model is prompted to say honestly when the retrieved notes don't answer the question, which works in practice, but an untuned distance cutoff was deliberately deferred rather than guessed at.
+- **No relevance cutoff on RAG retrieval.** `RagService` always returns up to its top-K notes/tasks combined if the user has *any* embedded content, even for an unrelated question — there's no cosine-distance threshold. The model is prompted to say honestly when the retrieved context doesn't answer the question, which works in practice, but an untuned distance cutoff was deliberately deferred rather than guessed at.
 - **Streaming has no reconnect/replay.** If the Node.js relay or the browser disconnects mid-stream, the partial answer already generated is simply lost — no persistence happens for an interrupted stream, and there's no mechanism to resume or replay a dropped SSE connection. Acceptable for a single-user local tool; would need real infrastructure (a job/event log) to fix properly.
 - **Notes have no embedding-status indicator in the UI.** `NoteResponse` doesn't expose `Note.EmbeddingStatus`, so the frontend can't yet show whether a note's embeddings are still processing — a backend DTO change would be needed first.
 

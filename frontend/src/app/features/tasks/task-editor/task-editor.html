@@ -1,0 +1,40 @@
+<div class="task-editor-page">
+  @if (loading()) {
+    <p>Loading…</p>
+  } @else if (notFound()) {
+    <p>Task not found.</p>
+    <a routerLink="/tasks">Back to tasks</a>
+  } @else {
+    <h1>{{ taskId ? 'Edit task' : 'New task' }}</h1>
+    <form (ngSubmit)="save()">
+      <label>
+        Title
+        <input type="text" name="title" [(ngModel)]="title" required />
+      </label>
+      <label>
+        Description
+        <textarea name="description" [(ngModel)]="description" rows="6"></textarea>
+      </label>
+      <label>
+        Due date
+        <input type="date" name="dueDate" [(ngModel)]="dueDate" />
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="isCompleted" [(ngModel)]="isCompleted" />
+        Completed
+      </label>
+
+      @if (errorMessage()) {
+        <p class="error">{{ errorMessage() }}</p>
+      }
+
+      <div class="actions">
+        <button type="submit" [disabled]="saving()">{{ saving() ? 'Saving…' : 'Save' }}</button>
+        <a routerLink="/tasks" class="button secondary">Cancel</a>
+        @if (taskId) {
+          <button type="button" class="danger" (click)="delete()">Delete</button>
+        }
+      </div>
+    </form>
+  }
+</div>

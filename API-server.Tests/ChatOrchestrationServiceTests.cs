@@ -18,17 +18,14 @@ public class ChatOrchestrationServiceTests
         return new TestAppDbContext(options);
     }
 
-    private static NoteChunk CreateChunk(string noteTitle, string chunkText, int chunkIndex = 0)
-    {
-        var note = new Note { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Title = noteTitle, Content = "..." };
-        return new NoteChunk { Id = Guid.NewGuid(), NoteId = note.Id, ChunkText = chunkText, ChunkIndex = chunkIndex, Note = note };
-    }
+    private static RagSourceItem CreateSourceItem(string title, string text, int chunkIndex = 0, string sourceType = "Note") =>
+        new(sourceType, Guid.NewGuid(), title, text, chunkIndex, Distance: 0.0);
 
     private static ChatOrchestrationService CreateSut(
         AppDbContext db, FakeRagService? ragService = null, FakeChatService? chatService = null) =>
         new(
             db,
-            ragService ?? new FakeRagService((_, _, _) => Array.Empty<NoteChunk>()),
+            ragService ?? new FakeRagService((_, _, _) => Array.Empty<RagSourceItem>()),
             chatService ?? new FakeChatService(),
             NullLogger<ChatOrchestrationService>.Instance);
 
@@ -52,8 +49,8 @@ public class ChatOrchestrationServiceTests
     public async Task AskAsync_ReturnsAnswerAndSourcesFromRetrievedChunks()
     {
         using var db = CreateDbContext();
-        var chunk = CreateChunk("My Note", "chunk text", chunkIndex: 2);
-        var ragService = new FakeRagService((_, _, _) => new[] { chunk });
+        var item = CreateSourceItem("My Note", "chunk text", chunkIndex: 2);
+        var ragService = new FakeRagService((_, _, _) => new[] { item });
         var chatService = new FakeChatService { Answer = "Grounded answer." };
         var sut = CreateSut(db, ragService, chatService);
 
@@ -61,8 +58,9 @@ public class ChatOrchestrationServiceTests
 
         Assert.Equal("Grounded answer.", response.Answer);
         Assert.Single(response.Sources);
-        Assert.Equal(chunk.NoteId, response.Sources[0].NoteId);
-        Assert.Equal("My Note", response.Sources[0].NoteTitle);
+        Assert.Equal(item.SourceId, response.Sources[0].SourceId);
+        Assert.Equal("My Note", response.Sources[0].SourceTitle);
+        Assert.Equal("Note", response.Sources[0].SourceType);
         Assert.Equal(2, response.Sources[0].ChunkIndex);
     }
 
@@ -74,7 +72,7 @@ public class ChatOrchestrationServiceTests
         var ragService = new FakeRagService((userId, _, _) =>
         {
             seenUserId = userId;
-            return Array.Empty<NoteChunk>();
+            return Array.Empty<RagSourceItem>();
         });
         var sut = CreateSut(db, ragService: ragService);
         var callingUser = Guid.NewGuid();
@@ -98,8 +96,8 @@ public class ChatOrchestrationServiceTests
     public async Task AskStreamingAsync_YieldsMetaEventFirstWithRetrievedSources()
     {
         using var db = CreateDbContext();
-        var chunk = CreateChunk("My Note", "chunk text", chunkIndex: 3);
-        var ragService = new FakeRagService((_, _, _) => new[] { chunk });
+        var item = CreateSourceItem("My Note", "chunk text", chunkIndex: 3);
+        var ragService = new FakeRagService((_, _, _) => new[] { item });
         var sut = CreateSut(db, ragService: ragService);
 
         var events = new List<ChatStreamEvent>();
@@ -110,8 +108,8 @@ public class ChatOrchestrationServiceTests
 
         var meta = Assert.IsType<ChatStreamEvent.Meta>(events[0]);
         Assert.Single(meta.Sources);
-        Assert.Equal(chunk.NoteId, meta.Sources[0].NoteId);
-        Assert.Equal("My Note", meta.Sources[0].NoteTitle);
+        Assert.Equal(item.SourceId, meta.Sources[0].SourceId);
+        Assert.Equal("My Note", meta.Sources[0].SourceTitle);
         Assert.Equal(3, meta.Sources[0].ChunkIndex);
     }
 

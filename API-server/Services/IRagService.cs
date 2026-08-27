@@ -1,15 +1,13 @@
-using ProductivityHub.Models;
-
 namespace ProductivityHub.Services
 {
     public interface IRagService
     {
         /// <summary>
-        /// Returns up to <paramref name="topK"/> of the calling user's own NoteChunks
-        /// most semantically similar to <paramref name="query"/>, ordered most-relevant first.
-        /// Never returns chunks belonging to another user.
+        /// Returns up to <paramref name="topK"/> of the calling user's own Note chunks and
+        /// Tasks combined, ranked by semantic similarity to <paramref name="query"/> regardless
+        /// of source, most-relevant first. Never returns items belonging to another user.
         /// </summary>
-        Task<IReadOnlyList<NoteChunk>> GetRelevantChunksAsync(
+        Task<IReadOnlyList<RagSourceItem>> GetRelevantChunksAsync(
             Guid userId, string query, int topK = 5, CancellationToken cancellationToken = default);
     }
 }

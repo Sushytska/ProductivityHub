@@ -21,5 +21,6 @@ internal class TestAppDbContext : AppDbContext
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.Entity<NoteChunk>().Ignore(nc => nc.Embedding);
+        modelBuilder.Entity<TaskItem>().Ignore(t => t.Embedding);
     }
 }

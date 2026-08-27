@@ -25,8 +25,8 @@ namespace ProductivityHub.Services
 
         public async Task<ChatResponse> AskAsync(Guid userId, ChatRequest request, CancellationToken cancellationToken)
         {
-            var chunks = await _ragService.GetRelevantChunksAsync(userId, request.Question, DefaultTopK, cancellationToken);
-            var answer = await _chatService.GetAnswerAsync(request.Question, chunks, cancellationToken);
+            var contextItems = await _ragService.GetRelevantChunksAsync(userId, request.Question, DefaultTopK, cancellationToken);
+            var answer = await _chatService.GetAnswerAsync(request.Question, contextItems, cancellationToken);
 
             var now = DateTime.UtcNow;
             _db.ChatMessages.AddRange(
@@ -41,18 +41,18 @@ namespace ProductivityHub.Services
             return new ChatResponse(
                 answer,
                 now,
-                chunks.Select(c => new ChatSourceResponse(c.NoteId, c.Note.Title, c.ChunkIndex)).ToList());
+                contextItems.Select(item => new ChatSourceResponse(item.SourceId, item.Title, item.SourceType, item.ChunkIndex)).ToList());
         }
 
         public async IAsyncEnumerable<ChatStreamEvent> AskStreamingAsync(
             Guid userId, ChatRequest request, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            var chunks = await _ragService.GetRelevantChunksAsync(userId, request.Question, DefaultTopK, cancellationToken);
-            var sources = chunks.Select(c => new ChatSourceResponse(c.NoteId, c.Note.Title, c.ChunkIndex)).ToList();
+            var contextItems = await _ragService.GetRelevantChunksAsync(userId, request.Question, DefaultTopK, cancellationToken);
+            var sources = contextItems.Select(item => new ChatSourceResponse(item.SourceId, item.Title, item.SourceType, item.ChunkIndex)).ToList();
             yield return new ChatStreamEvent.Meta(sources);
 
             var answerBuilder = new StringBuilder();
-            await foreach (var delta in _chatService.StreamAnswerAsync(request.Question, chunks, cancellationToken))
+            await foreach (var delta in _chatService.StreamAnswerAsync(request.Question, contextItems, cancellationToken))
             {
                 answerBuilder.Append(delta);
                 yield return new ChatStreamEvent.Token(delta);

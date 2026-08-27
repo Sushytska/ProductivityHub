@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using ProductivityHub.Database;
 namespace ProductivityHub.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260827132601_AddTasksTable")]
+    partial class AddTasksTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -105,11 +108,6 @@ namespace ProductivityHub.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Embedding");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
-                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
-
                     b.HasIndex("NoteId");
 
                     b.ToTable("NoteChunks");
@@ -130,19 +128,6 @@ namespace ProductivityHub.Migrations
                     b.Property<DateOnly?>("DueDate")
                         .HasColumnType("date");
 
-                    b.Property<Vector>("Embedding")
-                        .HasColumnType("vector(768)");
-
-                    b.Property<int>("EmbeddingAttempts")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("EmbeddingError")
-                        .HasColumnType("text");
-
-                    b.Property<string>("EmbeddingStatus")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<bool>("IsCompleted")
                         .HasColumnType("boolean");
 
@@ -154,11 +139,6 @@ namespace ProductivityHub.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Embedding");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
-                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
 
                     b.ToTable("Tasks");
                 });

@@ -1,6 +1,9 @@
+export type ChatSourceType = 'Note' | 'Task';
+
 export interface ChatSource {
-  noteId: string;
-  noteTitle: string;
+  sourceId: string;
+  sourceTitle: string;
+  sourceType: ChatSourceType;
   chunkIndex: number;
 }
 
