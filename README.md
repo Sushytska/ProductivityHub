@@ -63,9 +63,10 @@ This project is under active development. What's actually built so far vs. what'
 - ✅ Full-stack Docker Compose (`API-server/docker-compose.yml`) — Postgres, Redis, the API, `realtime-service`, and Nginx (serving the Angular build and reverse-proxying `/api` and `/socket.io`), plus an opt-in containerized Ollama
 - ✅ Tasks CRUD (`api/Tasks`), scoped to the authenticated user, with a due date, a completed flag, and a matching Angular list/editor UI (inline complete-toggle, incomplete-first sorting), plus its own embedding pipeline (title + status + due date + description) feeding the same RAG chat as notes
 - ✅ HNSW indexes (`vector_cosine_ops`) on both `NoteChunks.Embedding` and `Tasks.Embedding` — similarity search no longer falls back to a sequential scan
+- ✅ Habit Tracker (`api/Habits`), scoped to the authenticated user — daily habits with a per-day completion toggle (`api/Habits/{id}/toggle`), current/longest streak calculation, and a matching Angular list/editor UI (7-day week-strip toggle). Not wired into RAG chat — a habit's content (a name + a completion calendar) is a poor fit for semantic search.
 
 **Planned**
-- ⏳ Habit Tracker
+- (none — all currently planned features are implemented)
 
 ---
 

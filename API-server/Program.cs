@@ -20,6 +20,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<NoteService>();
 builder.Services.AddScoped<TaskService>();
+builder.Services.AddScoped<HabitService>();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 {

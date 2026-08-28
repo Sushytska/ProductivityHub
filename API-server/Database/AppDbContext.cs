@@ -16,6 +16,10 @@ namespace ProductivityHub.Database
 
         public DbSet<TaskItem> Tasks { get; set; }
 
+        public DbSet<Habit> Habits { get; set; }
+
+        public DbSet<HabitCompletion> HabitCompletions { get; set; }
+
         public DbSet<ChatMessage> ChatMessages { get; set; }
 
         public DbSet<User> Users { get; set; }
@@ -46,6 +50,18 @@ namespace ProductivityHub.Database
                 entity.Property(t => t.EmbeddingStatus).HasConversion<string>();
                 entity.Property(t => t.Embedding).HasColumnType("vector(768)");
                 entity.HasIndex(t => t.Embedding).HasMethod("hnsw").HasOperators("vector_cosine_ops");
+            });
+
+            modelBuilder.Entity<Habit>(entity =>
+            {
+                entity.HasMany(h => h.Completions)
+                    .WithOne(c => c.Habit)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<HabitCompletion>(entity =>
+            {
+                entity.HasIndex(c => new { c.HabitId, c.Date }).IsUnique();
             });
         }
     }

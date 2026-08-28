@@ -1,0 +1,32 @@
+<div class="habit-editor-page">
+  @if (loading()) {
+    <p>Loading…</p>
+  } @else if (notFound()) {
+    <p>Habit not found.</p>
+    <a routerLink="/habits">Back to habits</a>
+  } @else {
+    <h1>{{ habitId ? 'Edit habit' : 'New habit' }}</h1>
+    <form (ngSubmit)="save()">
+      <label>
+        Name
+        <input type="text" name="name" [(ngModel)]="name" required />
+      </label>
+      <label>
+        Description
+        <textarea name="description" [(ngModel)]="description" rows="6"></textarea>
+      </label>
+
+      @if (errorMessage()) {
+        <p class="error">{{ errorMessage() }}</p>
+      }
+
+      <div class="actions">
+        <button type="submit" [disabled]="saving()">{{ saving() ? 'Saving…' : 'Save' }}</button>
+        <a routerLink="/habits" class="button secondary">Cancel</a>
+        @if (habitId) {
+          <button type="button" class="danger" (click)="delete()">Delete</button>
+        }
+      </div>
+    </form>
+  }
+</div>
