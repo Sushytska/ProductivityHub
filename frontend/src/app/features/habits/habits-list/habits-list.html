@@ -1,0 +1,40 @@
+<div class="habits-page">
+  <div class="page-header">
+    <h1>Habits</h1>
+    <a routerLink="/habits/new" class="button">New habit</a>
+  </div>
+
+  @if (loading()) {
+    <p>Loading…</p>
+  } @else if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  } @else if (habits().length === 0) {
+    <p>No habits yet.</p>
+  } @else {
+    <ul class="habits-list">
+      @for (habit of habits(); track habit.id) {
+        <li>
+          <div class="habit-row">
+            <a [routerLink]="['/habits', habit.id]" class="habit-name">{{ habit.name }}</a>
+            <span class="streak">Current streak: {{ habit.currentStreak }}</span>
+            <button type="button" class="danger" (click)="deleteHabit(habit.id, $event)">Delete</button>
+          </div>
+          <div class="week-strip">
+            @for (cell of weekStrip(habit); track cell.date) {
+              <button
+                type="button"
+                class="week-cell"
+                [class.completed]="cell.completed"
+                [disabled]="isToggling(habit, cell.date)"
+                [attr.aria-label]="cell.label + ' ' + cell.date + (cell.completed ? ' - completed' : ' - not completed')"
+                (click)="toggleDate(habit, cell.date)"
+              >
+                {{ cell.label }}
+              </button>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</div>
