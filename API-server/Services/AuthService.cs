@@ -35,7 +35,18 @@ namespace ProductivityHub.Services
             };
 
             _db.Users.Add(user);
-            await _db.SaveChangesAsync();
+
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Two concurrent registrations for the same email both passed the AnyAsync
+                // check above before either committed — the unique index on Email rejected
+                // the loser. Treat it the same as the check finding an existing user.
+                return null;
+            }
 
             return new AuthResponse(GenerateToken(user));
         }
@@ -54,7 +65,8 @@ namespace ProductivityHub.Services
 
         private string GenerateToken(User user)
         {
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["JWT:Key"]));
+            var jwtKey = _config["JWT:Key"] ?? throw new InvalidOperationException("JWT:Key is not configured.");
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]

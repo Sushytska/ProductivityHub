@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using ProductivityHub.Services;
 using System.Security.Claims;
 using static ProductivityHub.DTOs.AuthDTOs;
@@ -17,6 +18,7 @@ namespace ProductivityHub.Controllers
         }
 
         [HttpPost("register")]
+        [EnableRateLimiting("auth")]
         public async Task<IActionResult> Register(RegisterRequest request)
         {
             var response = await _authService.RegisterAsync(request);
@@ -30,6 +32,7 @@ namespace ProductivityHub.Controllers
         }
 
         [HttpPost("login")]
+        [EnableRateLimiting("auth")]
         public async Task<IActionResult> Login(LoginRequest request)
         {
             var response = await _authService.LoginAsync(request);
