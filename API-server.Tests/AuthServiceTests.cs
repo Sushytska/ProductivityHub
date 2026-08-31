@@ -59,6 +59,16 @@ public class AuthServiceTests
         Assert.Equal(1, await db.Users.CountAsync(u => u.Email == "dup@example.com"));
     }
 
+    // RegisterAsync's DbUpdateException handling (the fallback for two concurrent
+    // registrations racing past the AnyAsync check above before either commits) can't be
+    // exercised here: the EF Core InMemory provider does not enforce unique indexes at
+    // all — same limitation already documented in HabitServiceTests for the
+    // HabitCompletions (HabitId, Date) index. Verified manually instead, against real
+    // Postgres: fired 10 truly concurrent POST /api/Auth/register requests for the same
+    // email; exactly one returned 200 with a token, the other nine returned 400 "User
+    // already exists.", and exactly one row existed in Users for that email afterward —
+    // no 500, no duplicate account.
+
     [Fact]
     public async Task LoginAsync_ValidCredentials_ReturnsToken()
     {

@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace ProductivityHub.Services
 {
     public interface IChatService
@@ -9,6 +7,6 @@ namespace ProductivityHub.Services
 
         IAsyncEnumerable<string> StreamAnswerAsync(
             string question, IReadOnlyList<RagSourceItem> contextItems,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default);
+            CancellationToken cancellationToken = default);
     }
 }

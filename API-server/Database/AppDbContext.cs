@@ -29,6 +29,15 @@ namespace ProductivityHub.Database
         {
             modelBuilder.HasPostgresExtension("vector");
 
+            modelBuilder.Entity<User>(entity =>
+            {
+                // Register-then-insert has an application-level "email taken" check
+                // (AuthService.RegisterAsync), but only a DB-level unique constraint
+                // closes the race where two concurrent registrations for the same email
+                // both pass that check before either commits.
+                entity.HasIndex(u => u.Email).IsUnique();
+            });
+
             modelBuilder.Entity<Note>(entity =>
             {
                 entity.Property(n => n.EmbeddingStatus)
@@ -37,6 +46,11 @@ namespace ProductivityHub.Database
                 entity.HasMany(n => n.Chunks)
                     .WithOne(n => n.Note)
                     .OnDelete(DeleteBehavior.Cascade);
+
+                // Every ownership-scoped query filters on UserId (there's no FK/nav
+                // property to User — see CLAUDE.md) — this is the column each of those
+                // queries needs indexed, not Id.
+                entity.HasIndex(n => n.UserId);
             });
 
             modelBuilder.Entity<NoteChunk>(entity =>
@@ -50,6 +64,7 @@ namespace ProductivityHub.Database
                 entity.Property(t => t.EmbeddingStatus).HasConversion<string>();
                 entity.Property(t => t.Embedding).HasColumnType("vector(768)");
                 entity.HasIndex(t => t.Embedding).HasMethod("hnsw").HasOperators("vector_cosine_ops");
+                entity.HasIndex(t => t.UserId);
             });
 
             modelBuilder.Entity<Habit>(entity =>
@@ -57,11 +72,18 @@ namespace ProductivityHub.Database
                 entity.HasMany(h => h.Completions)
                     .WithOne(c => c.Habit)
                     .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(h => h.UserId);
             });
 
             modelBuilder.Entity<HabitCompletion>(entity =>
             {
                 entity.HasIndex(c => new { c.HabitId, c.Date }).IsUnique();
+            });
+
+            modelBuilder.Entity<ChatMessage>(entity =>
+            {
+                entity.HasIndex(m => m.UserId);
             });
         }
     }
